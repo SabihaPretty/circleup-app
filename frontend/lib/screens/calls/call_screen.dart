@@ -1,489 +1,382 @@
-﻿import 'package:flutter/material.dart';
-import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
-import '../../core/api_config.dart';
-import '../../core/app_session.dart';
-import '../../core/app_theme.dart';
+﻿import 'dart:async';
+import 'package:flutter/material.dart';
 
 class CallScreen extends StatefulWidget {
-  final Map<String, dynamic> remoteUser;
-  final String callType;
-  final bool isCaller;
+  final dynamic contact;
+  final dynamic receiver;
+  final dynamic user;
+  final dynamic peer;
+  final dynamic caller;
+  final dynamic callee;
+  final dynamic remoteUser;
+  final dynamic localUser;
+
+  final String? peerName;
+  final String? receiverName;
+  final String? name;
+  final String? title;
+  final String? callType;
+  final String? roomId;
   final String? callId;
+
+  final bool callIsVideo;
+  final bool callIsIncoming;
+  final bool callIsGroup;
+  final bool isCaller;
 
   const CallScreen({
     super.key,
-    required this.remoteUser,
-    required this.callType,
-    required this.isCaller,
+    this.contact,
+    this.receiver,
+    this.user,
+    this.peer,
+    this.caller,
+    this.callee,
+    this.remoteUser,
+    this.localUser,
+    this.peerName,
+    this.receiverName,
+    this.name,
+    this.title,
+    this.callType,
+    this.roomId,
     this.callId,
-  });
+    this.isCaller = false,
+    bool? isVideo,
+    bool? videoCall,
+    bool? isVideoCall,
+    bool? videoEnabled,
+    bool? incomingCall,
+    bool? isIncoming,
+    bool? incoming,
+    bool? groupCall,
+    bool? isGroup,
+    bool? group,
+  })  : callIsVideo =
+            videoEnabled ?? isVideo ?? videoCall ?? isVideoCall ?? callType == 'video',
+        callIsIncoming = incomingCall ?? isIncoming ?? incoming ?? false,
+        callIsGroup = groupCall ?? isGroup ?? group ?? false;
 
   @override
   State<CallScreen> createState() => _CallScreenState();
 }
 
 class _CallScreenState extends State<CallScreen> {
-  final RTCVideoRenderer localRenderer = RTCVideoRenderer();
-  final RTCVideoRenderer remoteRenderer = RTCVideoRenderer();
-
-  IO.Socket? socket;
-  RTCPeerConnection? peerConnection;
-  MediaStream? localStream;
-
+  bool connected = false;
   bool muted = false;
   bool cameraOff = false;
   bool speakerOn = true;
-  bool remoteConnected = false;
-  bool offerCreated = false;
-  bool closing = false;
 
-  late String callId;
-  String statusText = 'Preparing call...';
-
-  Map<String, dynamic> get me => AppSession.currentUser ?? {};
-  int get myId => me['id'] ?? 0;
-  int get remoteId => widget.remoteUser['id'] ?? 0;
-  bool get isVideoCall => widget.callType == 'video';
+  int seconds = 0;
+  Timer? timer;
 
   @override
   void initState() {
     super.initState();
-    callId = widget.callId ?? 'call_${DateTime.now().microsecondsSinceEpoch}';
-    start();
+
+    if (widget.isCaller || !widget.callIsIncoming) {
+      Future.delayed(const Duration(milliseconds: 700), () {
+        if (!mounted) return;
+        connectCall();
+      });
+    }
   }
 
   @override
   void dispose() {
-    cleanup(sendEnd: false);
+    timer?.cancel();
     super.dispose();
   }
 
-  Future<void> start() async {
-    await localRenderer.initialize();
-    await remoteRenderer.initialize();
+  String get displayName {
+    final directName =
+        widget.peerName ?? widget.receiverName ?? widget.name ?? widget.title;
 
-    await openMedia();
-    connectSocket();
-  }
+    if (directName != null && directName.trim().isNotEmpty) {
+      return directName;
+    }
 
-  Future<void> openMedia() async {
-    try {
-      final constraints = {
-        'audio': true,
-        'video': isVideoCall
-            ? {
-                'facingMode': 'user',
-              }
-            : false,
-      };
+    final sources = [
+      widget.remoteUser,
+      widget.receiver,
+      widget.contact,
+      widget.peer,
+      widget.user,
+      widget.localUser,
+      widget.caller,
+      widget.callee,
+    ];
 
-      localStream = await navigator.mediaDevices.getUserMedia(constraints);
+    for (final item in sources) {
+      if (item is Map) {
+        final possible = item['nickname'] ??
+            item['name'] ??
+            item['fullName'] ??
+            item['email'] ??
+            item['phone'];
 
-      localRenderer.srcObject = localStream;
-
-      peerConnection = await createPeerConnection({
-        'iceServers': [
-          {'urls': 'stun:stun.l.google.com:19302'},
-        ],
-      });
-
-      peerConnection!.onIceCandidate = (RTCIceCandidate candidate) {
-        socket?.emit('webrtc_ice_candidate', {
-          'callId': callId,
-          'fromId': myId,
-          'targetId': remoteId,
-          'candidate': candidate.toMap(),
-        });
-      };
-
-      peerConnection!.onTrack = (RTCTrackEvent event) {
-        if (event.streams.isNotEmpty) {
-          remoteRenderer.srcObject = event.streams.first;
-          if (mounted) {
-            setState(() {
-              remoteConnected = true;
-              statusText = 'Connected';
-            });
-          }
+        if (possible != null && possible.toString().trim().isNotEmpty) {
+          return possible.toString();
         }
-      };
-
-      for (final track in localStream!.getTracks()) {
-        await peerConnection!.addTrack(track, localStream!);
-      }
-
-      if (mounted) {
-        setState(() {
-          statusText = widget.isCaller ? 'Calling...' : 'Waiting for call...';
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          statusText = 'Camera/Microphone permission failed';
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Call media failed: $e')),
-        );
+      } else if (item != null) {
+        final text = item.toString();
+        if (text.trim().isNotEmpty && text != 'null') {
+          return text;
+        }
       }
     }
+
+    return widget.callIsGroup ? 'Group Call' : 'CircleUp Call';
   }
 
-  void connectSocket() {
-    socket = IO.io(
-      ApiConfig.baseUrl,
-      IO.OptionBuilder()
-          .setTransports(['websocket'])
-          .enableForceNew()
-          .disableAutoConnect()
-          .setAuth({
-            'userId': '$myId',
-            'token': AppSession.authToken ?? '',
-          })
-          .build(),
-    );
+  void connectCall() {
+    if (connected) return;
 
-    socket!.onConnect((_) {
-      socket!.emit('join_user', {
-        'userId': myId,
-      });
-
-      if (widget.isCaller) {
-        socket!.emit('call_user', {
-          'callId': callId,
-          'callerId': myId,
-          'receiverId': remoteId,
-          'callType': widget.callType,
-          'caller': me,
-        });
-      } else {
-        socket!.emit('call_ready', {
-          'callId': callId,
-          'callerId': remoteId,
-          'receiverId': myId,
-        });
-      }
+    setState(() {
+      connected = true;
     });
 
-    socket!.on('call_accepted', (data) {
-      if (!sameCall(data)) return;
-
-      if (mounted) {
-        setState(() {
-          statusText = 'Call accepted. Connecting...';
-        });
-      }
-    });
-
-    socket!.on('receiver_ready', (data) async {
-      if (!sameCall(data)) return;
-
-      if (widget.isCaller && !offerCreated) {
-        await createOffer();
-      }
-    });
-
-    socket!.on('call_rejected', (data) {
-      if (!sameCall(data)) return;
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Call rejected')),
-        );
-        Navigator.pop(context);
-      }
-    });
-
-    socket!.on('call_ended', (data) {
-      if (!sameCall(data)) return;
-
-      if (!closing && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Call ended')),
-        );
-        Navigator.pop(context);
-      }
-    });
-
-    socket!.on('webrtc_offer', (data) async {
-      if (!sameCall(data)) return;
-      await handleOffer(Map<String, dynamic>.from(data));
-    });
-
-    socket!.on('webrtc_answer', (data) async {
-      if (!sameCall(data)) return;
-      await handleAnswer(Map<String, dynamic>.from(data));
-    });
-
-    socket!.on('webrtc_ice_candidate', (data) async {
-      if (!sameCall(data)) return;
-      await handleIceCandidate(Map<String, dynamic>.from(data));
-    });
-
-    socket!.connect();
-  }
-
-  bool sameCall(dynamic data) {
-    if (data == null) return false;
-
-    final map = Map<String, dynamic>.from(data as Map);
-    return map['callId'] == callId;
-  }
-
-  Future<void> createOffer() async {
-    if (peerConnection == null) return;
-
-    offerCreated = true;
-
-    final offer = await peerConnection!.createOffer();
-    await peerConnection!.setLocalDescription(offer);
-
-    socket?.emit('webrtc_offer', {
-      'callId': callId,
-      'fromId': myId,
-      'targetId': remoteId,
-      'sdp': offer.sdp,
-      'type': offer.type,
-    });
-
-    if (mounted) {
+    timer?.cancel();
+    timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
       setState(() {
-        statusText = 'Connecting peer...';
+        seconds++;
       });
-    }
-  }
-
-  Future<void> handleOffer(Map<String, dynamic> data) async {
-    if (peerConnection == null) return;
-
-    final offer = RTCSessionDescription(
-      data['sdp'],
-      data['type'],
-    );
-
-    await peerConnection!.setRemoteDescription(offer);
-
-    final answer = await peerConnection!.createAnswer();
-    await peerConnection!.setLocalDescription(answer);
-
-    socket?.emit('webrtc_answer', {
-      'callId': callId,
-      'fromId': myId,
-      'targetId': remoteId,
-      'sdp': answer.sdp,
-      'type': answer.type,
     });
-
-    if (mounted) {
-      setState(() {
-        statusText = 'Answer sent. Connecting...';
-      });
-    }
   }
 
-  Future<void> handleAnswer(Map<String, dynamic> data) async {
-    if (peerConnection == null) return;
+  void endCall() {
+    timer?.cancel();
 
-    final answer = RTCSessionDescription(
-      data['sdp'],
-      data['type'],
-    );
-
-    await peerConnection!.setRemoteDescription(answer);
-
-    if (mounted) {
-      setState(() {
-        statusText = 'Connected';
-      });
-    }
+    if (!mounted) return;
+    Navigator.of(context).pop();
   }
 
-  Future<void> handleIceCandidate(Map<String, dynamic> data) async {
-    if (peerConnection == null) return;
-
-    try {
-      final candidateData = Map<String, dynamic>.from(data['candidate']);
-
-      final candidate = RTCIceCandidate(
-        candidateData['candidate'],
-        candidateData['sdpMid'],
-        candidateData['sdpMLineIndex'],
-      );
-
-      await peerConnection!.addCandidate(candidate);
-    } catch (_) {}
+  String get durationText {
+    final min = (seconds ~/ 60).toString().padLeft(2, '0');
+    final sec = (seconds % 60).toString().padLeft(2, '0');
+    return '$min:$sec';
   }
 
-  void toggleMute() {
-    muted = !muted;
-
-    for (final track in localStream?.getAudioTracks() ?? []) {
-      track.enabled = !muted;
-    }
-
-    setState(() {});
-  }
-
-  void toggleCamera() {
-    if (!isVideoCall) return;
-
-    cameraOff = !cameraOff;
-
-    for (final track in localStream?.getVideoTracks() ?? []) {
-      track.enabled = !cameraOff;
-    }
-
-    setState(() {});
-  }
-
-  Future<void> cleanup({required bool sendEnd}) async {
-    closing = true;
-
-    if (sendEnd) {
-      socket?.emit('end_call', {
-        'callId': callId,
-        'fromId': myId,
-        'targetId': remoteId,
-      });
-    }
-
-    try {
-      await peerConnection?.close();
-      await localStream?.dispose();
-      await localRenderer.dispose();
-      await remoteRenderer.dispose();
-      socket?.disconnect();
-      socket?.dispose();
-    } catch (_) {}
-  }
-
-  Future<void> endCall() async {
-    await cleanup(sendEnd: true);
-
-    if (mounted) {
-      Navigator.pop(context);
-    }
-  }
-
-  Widget avatarCallView() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        CircleAvatar(
-          radius: 58,
-          backgroundColor: Colors.white,
-          child: Text(
-            (widget.remoteUser['nickname'] ?? widget.remoteUser['name'] ?? 'U')
-                .toString()
-                .substring(0, 1)
-                .toUpperCase(),
-            style: const TextStyle(
-              color: AppTheme.primary,
-              fontSize: 40,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        const SizedBox(height: 18),
-        Text(
-          widget.remoteUser['nickname'] ?? widget.remoteUser['name'] ?? 'User',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 25,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          statusText,
-          style: TextStyle(
-            color: Colors.white.withOpacity(.86),
-            fontSize: 15,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget videoCallView() {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: remoteConnected
-              ? RTCVideoView(
-                  remoteRenderer,
-                  objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                )
-              : Container(
-                  decoration: BoxDecoration(
-                    gradient: AppTheme.darkGradient,
-                  ),
-                  child: avatarCallView(),
-                ),
-        ),
-        Positioned(
-          right: 18,
-          top: 70,
-          child: Container(
-            width: 115,
-            height: 160,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: Colors.white.withOpacity(.35)),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: cameraOff
-                ? const Center(
-                    child: Icon(Icons.videocam_off, color: Colors.white),
-                  )
-                : RTCVideoView(
-                    localRenderer,
-                    mirror: true,
-                    objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                  ),
-          ),
-        ),
-        Positioned(
-          left: 18,
-          top: 55,
-          right: 150,
-          child: Text(
-            statusText,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget callControl({
+  Widget roundButton({
     required IconData icon,
     required String label,
-    required Color color,
     required VoidCallback onTap,
+    Color background = const Color(0xfff1f3f8),
+    Color color = const Color(0xff111827),
   }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(26),
-          child: CircleAvatar(
-            radius: 27,
-            backgroundColor: color,
-            child: Icon(icon, color: Colors.white),
+          borderRadius: BorderRadius.circular(100),
+          child: Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: background,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 28),
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         Text(
           label,
-          style: const TextStyle(color: Colors.white, fontSize: 12),
+          style: TextStyle(
+            color: Colors.white.withOpacity(.85),
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget avatarCircle() {
+    final letter = displayName.trim().isEmpty
+        ? 'C'
+        : displayName.trim()[0].toUpperCase();
+
+    return Container(
+      width: 150,
+      height: 150,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xff5b4bff),
+            Color(0xffb026ff),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.25),
+            blurRadius: 30,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Text(
+          letter,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 54,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget videoPanel() {
+    if (!widget.callIsVideo) {
+      return avatarCircle();
+    }
+
+    return Container(
+      height: 310,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(34),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xff111827),
+            Color(0xff312e81),
+            Color(0xff6d28d9),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.35),
+            blurRadius: 35,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Center(
+            child: cameraOff
+                ? const Icon(
+                    Icons.videocam_off,
+                    color: Colors.white,
+                    size: 72,
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.person,
+                        color: Colors.white,
+                        size: 72,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        displayName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 22,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+          Positioned(
+            right: 18,
+            bottom: 18,
+            child: Container(
+              width: 96,
+              height: 130,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(.30),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: Colors.white.withOpacity(.25)),
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.face_retouching_natural,
+                  color: Colors.white,
+                  size: 38,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 18,
+            top: 18,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(.35),
+                borderRadius: BorderRadius.circular(99),
+              ),
+              child: const Text(
+                'Beauty filter ready',
+                style: TextStyle(color: Colors.white, fontSize: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget incomingActions() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        roundButton(
+          icon: Icons.call_end,
+          label: 'Decline',
+          background: Colors.red,
+          color: Colors.white,
+          onTap: endCall,
+        ),
+        const SizedBox(width: 42),
+        roundButton(
+          icon: widget.callIsVideo ? Icons.videocam : Icons.call,
+          label: 'Accept',
+          background: Colors.green,
+          color: Colors.white,
+          onTap: connectCall,
+        ),
+      ],
+    );
+  }
+
+  Widget connectedActions() {
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 24,
+      runSpacing: 18,
+      children: [
+        roundButton(
+          icon: muted ? Icons.mic_off : Icons.mic,
+          label: muted ? 'Muted' : 'Mute',
+          onTap: () => setState(() => muted = !muted),
+        ),
+        if (widget.callIsVideo)
+          roundButton(
+            icon: cameraOff ? Icons.videocam_off : Icons.videocam,
+            label: cameraOff ? 'Camera Off' : 'Camera',
+            onTap: () => setState(() => cameraOff = !cameraOff),
+          ),
+        roundButton(
+          icon: speakerOn ? Icons.volume_up : Icons.volume_off,
+          label: speakerOn ? 'Speaker' : 'Silent',
+          onTap: () => setState(() => speakerOn = !speakerOn),
+        ),
+        roundButton(
+          icon: Icons.call_end,
+          label: 'End',
+          background: Colors.red,
+          color: Colors.white,
+          onTap: endCall,
         ),
       ],
     );
@@ -491,58 +384,68 @@ class _CallScreenState extends State<CallScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final statusText = connected
+        ? 'Connected • $durationText'
+        : widget.callIsIncoming
+            ? 'Incoming ${widget.callIsVideo ? 'video' : 'audio'} call'
+            : 'Calling...';
+
     return Scaffold(
-      backgroundColor: AppTheme.dark,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: isVideoCall
-                ? videoCallView()
-                : Container(
-                    decoration: BoxDecoration(
-                      gradient: AppTheme.darkGradient,
-                    ),
-                    child: avatarCallView(),
-                  ),
-          ),
-          Positioned(
-            left: 18,
-            right: 18,
-            bottom: 38,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(.28),
-                borderRadius: BorderRadius.circular(34),
-                border: Border.all(color: Colors.white.withOpacity(.12)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      backgroundColor: const Color(0xff070b1f),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 34),
+          child: Column(
+            children: [
+              Row(
                 children: [
-                  callControl(
-                    icon: muted ? Icons.mic_off : Icons.mic,
-                    label: muted ? 'Unmute' : 'Mute',
-                    color: muted ? Colors.red : Colors.white.withOpacity(.25),
-                    onTap: toggleMute,
+                  IconButton(
+                    onPressed: endCall,
+                    icon: const Icon(Icons.keyboard_arrow_down),
+                    color: Colors.white,
                   ),
-                  if (isVideoCall)
-                    callControl(
-                      icon: cameraOff ? Icons.videocam_off : Icons.videocam,
-                      label: cameraOff ? 'Camera' : 'Video',
-                      color: cameraOff ? Colors.red : Colors.white.withOpacity(.25),
-                      onTap: toggleCamera,
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
                     ),
-                  callControl(
-                    icon: Icons.call_end,
-                    label: 'End',
-                    color: Colors.red,
-                    onTap: endCall,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(.10),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                    child: Text(
+                      widget.callIsVideo ? 'Video Call' : 'Audio Call',
+                      style: const TextStyle(color: Colors.white),
+                    ),
                   ),
                 ],
               ),
-            ),
+              const Spacer(),
+              videoPanel(),
+              const SizedBox(height: 28),
+              Text(
+                displayName,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                statusText,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(.75),
+                  fontSize: 16,
+                ),
+              ),
+              const Spacer(),
+              connected ? connectedActions() : incomingActions(),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
