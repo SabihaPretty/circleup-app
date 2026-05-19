@@ -1,0 +1,344 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    Int              @id @default(autoincrement())
+  name                  String
+  nickname              String?
+  email                 String?          @unique
+  phone                 String?          @unique
+  password              String
+  birthDate             DateTime?
+  birthYear             Int?
+  birthMonth            Int?
+  birthDay              Int?
+  ageGroup              String
+  isEmailVerified       Boolean          @default(false)
+  isPhoneVerified       Boolean          @default(false)
+  twoStepEnabled        Boolean          @default(false)
+  preferredVerifyMode   String           @default("email")
+  profilePic            String?
+  trustScore            Int              @default(20)
+  accountMode           String           @default("personal")
+  creatorBio            String?
+  businessName          String?
+  businessCategory      String?
+
+  circles               Circle[]         @relation("UserCircles")
+  posts                 Post[]
+  messages              Message[]
+  helpPosts             HelpPost[]
+  likes                 Like[]
+  comments              Comment[]
+  stories               Story[]
+  reels                 Reel[]
+  products              Product[]        @relation("SellerProducts")
+  buyerOrders           ProductOrder[]   @relation("BuyerOrders")
+  sellerOrders          ProductOrder[]   @relation("SellerOrders")
+  sentNotifications     Notification[]   @relation("SentNotifications")
+  receivedNotifications Notification[]   @relation("ReceivedNotifications")
+  sentConnections       Connection[]     @relation("SentConnections")
+  receivedConnections   Connection[]     @relation("ReceivedConnections")
+  guardianInvites       GuardianInvite[] @relation("GuardianInvites")
+  childGuardianLinks    GuardianLink[]   @relation("ChildGuardianLinks")
+  guardianLinks         GuardianLink[]   @relation("GuardianLinks")
+  reportsMade           SafetyReport[]   @relation("ReporterReports")
+  reportsReceived       SafetyReport[]   @relation("ReportedUserReports")
+  reviewedReports       SafetyReport[]   @relation("ReviewedReports")
+  blocksMade            UserBlock[]      @relation("BlocksMade")
+  blocksReceived        UserBlock[]      @relation("BlocksReceived")
+
+  createdChatGroups     ChatGroup[]      @relation("CreatedChatGroups")
+  groupMemberships      ChatGroupMember[]
+  groupMessages         GroupMessage[]
+  nicknamesGiven        UserNickname[]   @relation("NicknameOwner")
+  nicknamesReceived     UserNickname[]   @relation("NicknameTarget")
+
+  createdAt             DateTime         @default(now())
+}
+
+model VerificationCode {
+  id            Int       @id @default(autoincrement())
+  identifier    String
+  channel       String
+  code          String
+  purpose       String    @default("register")
+  verifiedToken String?
+  verifiedAt    DateTime?
+  isUsed        Boolean   @default(false)
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+
+  @@index([identifier])
+  @@index([verifiedToken])
+}
+
+model Circle {
+  id        Int      @id @default(autoincrement())
+  name      String
+  type      String
+  members   User[]   @relation("UserCircles")
+  posts     Post[]
+  stories   Story[]
+  reels     Reel[]
+  createdAt DateTime @default(now())
+}
+
+model Post {
+  id        Int       @id @default(autoincrement())
+  content   String
+  mediaUrl  String?
+  mediaType String?   @default("text")
+  user      User      @relation(fields: [userId], references: [id])
+  userId    Int
+  circle    Circle    @relation(fields: [circleId], references: [id])
+  circleId  Int
+  likes     Like[]
+  comments  Comment[]
+  createdAt DateTime  @default(now())
+}
+
+model Like {
+  id           Int      @id @default(autoincrement())
+  reactionType String   @default("boost")
+  user         User     @relation(fields: [userId], references: [id])
+  userId       Int
+  post         Post     @relation(fields: [postId], references: [id])
+  postId       Int
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, postId])
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  content   String
+  mediaType String?  @default("text")
+  mediaUrl  String?
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  post      Post     @relation(fields: [postId], references: [id])
+  postId    Int
+  createdAt DateTime @default(now())
+}
+
+model Story {
+  id        Int      @id @default(autoincrement())
+  caption   String?
+  mediaType String   @default("text")
+  mediaUrl  String?
+  ageGroup  String
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  circle    Circle?  @relation(fields: [circleId], references: [id])
+  circleId  Int?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model Reel {
+  id          Int      @id @default(autoincrement())
+  caption     String
+  mediaType   String   @default("video")
+  mediaUrl    String?
+  ageGroup    String
+  category    String   @default("fun")
+  creatorMode String   @default("personal")
+  user        User     @relation(fields: [userId], references: [id])
+  userId      Int
+  circle      Circle?  @relation(fields: [circleId], references: [id])
+  circleId    Int?
+  createdAt   DateTime @default(now())
+}
+
+model Product {
+  id          Int            @id @default(autoincrement())
+  name        String
+  description String
+  price       Float
+  category    String         @default("general")
+  imageUrl    String?
+  status      String         @default("active")
+  seller      User           @relation("SellerProducts", fields: [sellerId], references: [id])
+  sellerId    Int
+  orders      ProductOrder[]
+  createdAt   DateTime       @default(now())
+}
+
+model ProductOrder {
+  id        Int      @id @default(autoincrement())
+  product   Product  @relation(fields: [productId], references: [id])
+  productId Int
+  buyer     User     @relation("BuyerOrders", fields: [buyerId], references: [id])
+  buyerId   Int
+  seller    User     @relation("SellerOrders", fields: [sellerId], references: [id])
+  sellerId  Int
+  quantity  Int      @default(1)
+  note      String?
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id          Int      @id @default(autoincrement())
+  type        String
+  title       String
+  message     String
+  targetType  String?
+  targetId    Int?
+  isRead      Boolean  @default(false)
+  recipient   User     @relation("ReceivedNotifications", fields: [recipientId], references: [id])
+  recipientId Int
+  sender      User?    @relation("SentNotifications", fields: [senderId], references: [id])
+  senderId    Int?
+  createdAt   DateTime @default(now())
+}
+
+model Connection {
+  id          Int      @id @default(autoincrement())
+  requester   User     @relation("SentConnections", fields: [requesterId], references: [id])
+  requesterId Int
+  receiver    User     @relation("ReceivedConnections", fields: [receiverId], references: [id])
+  receiverId  Int
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([requesterId, receiverId])
+}
+
+model GuardianInvite {
+  id           Int      @id @default(autoincrement())
+  code         String   @unique
+  guardian     User     @relation("GuardianInvites", fields: [guardianId], references: [id])
+  guardianId   Int
+  relationType String   @default("parent")
+  status       String   @default("active")
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
+}
+
+model GuardianLink {
+  id           Int      @id @default(autoincrement())
+  child        User     @relation("ChildGuardianLinks", fields: [childId], references: [id])
+  childId      Int
+  guardian     User     @relation("GuardianLinks", fields: [guardianId], references: [id])
+  guardianId   Int
+  relationType String   @default("parent")
+  status       String   @default("accepted")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([childId, guardianId])
+}
+
+model SafetyReport {
+  id             Int      @id @default(autoincrement())
+  reporter       User     @relation("ReporterReports", fields: [reporterId], references: [id])
+  reporterId     Int
+  reportedUser   User?    @relation("ReportedUserReports", fields: [reportedUserId], references: [id])
+  reportedUserId Int?
+  targetType     String
+  targetId       Int?
+  reason         String
+  description    String?
+  severity       String   @default("medium")
+  status         String   @default("pending")
+  actionTaken    String?
+  reviewer       User?    @relation("ReviewedReports", fields: [reviewerId], references: [id])
+  reviewerId     Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model UserBlock {
+  id        Int      @id @default(autoincrement())
+  blocker   User     @relation("BlocksMade", fields: [blockerId], references: [id])
+  blockerId Int
+  blocked   User     @relation("BlocksReceived", fields: [blockedId], references: [id])
+  blockedId Int
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+}
+
+model Message {
+  id           Int      @id @default(autoincrement())
+  content      String
+  sender       User     @relation(fields: [senderId], references: [id])
+  senderId     Int
+  receiverId   Int
+  conversation String
+  createdAt    DateTime @default(now())
+}
+
+model HelpPost {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  category    String
+  location    String?
+  status      String   @default("open")
+  user        User     @relation(fields: [userId], references: [id])
+  userId      Int
+  circleId    Int
+  createdAt   DateTime @default(now())
+}
+
+model ChatGroup {
+  id          Int               @id @default(autoincrement())
+  name        String
+  description String?
+  photoUrl    String?
+  ageGroup    String            @default("adult")
+  creator     User              @relation("CreatedChatGroups", fields: [creatorId], references: [id])
+  creatorId   Int
+  members     ChatGroupMember[]
+  messages    GroupMessage[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model ChatGroupMember {
+  id        Int       @id @default(autoincrement())
+  group     ChatGroup @relation(fields: [groupId], references: [id])
+  groupId   Int
+  user      User      @relation(fields: [userId], references: [id])
+  userId    Int
+  role      String    @default("member")
+  createdAt DateTime  @default(now())
+
+  @@unique([groupId, userId])
+}
+
+model GroupMessage {
+  id        Int       @id @default(autoincrement())
+  group     ChatGroup @relation(fields: [groupId], references: [id])
+  groupId   Int
+  sender    User      @relation(fields: [senderId], references: [id])
+  senderId  Int
+  content   String
+  mediaUrl  String?
+  mediaType String?   @default("text")
+  createdAt DateTime  @default(now())
+}
+
+model UserNickname {
+  id        Int      @id @default(autoincrement())
+  owner     User     @relation("NicknameOwner", fields: [ownerId], references: [id])
+  ownerId   Int
+  target    User     @relation("NicknameTarget", fields: [targetId], references: [id])
+  targetId  Int
+  nickname  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ownerId, targetId])
+}
