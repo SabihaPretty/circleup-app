@@ -79,15 +79,30 @@ class AppSession {
     _loadingFromStorage = false;
   }
 
-  // Old project compatibility:
-  // Your auth_screen.dart calls AppSession.setAuth(token, user)
-  // so this method accepts positional arguments.
+  // Flexible compatibility method.
+  // It supports both:
+  // AppSession.setAuth(user, token)
+  // AppSession.setAuth(token, user)
   static Future<void> setAuth(
-    String token,
-    Map<String, dynamic> user,
+    dynamic first,
+    dynamic second,
   ) async {
+    String? token;
+    Map<String, dynamic>? user;
+
+    if (first is Map && second is String) {
+      user = Map<String, dynamic>.from(first);
+      token = second;
+    } else if (first is String && second is Map) {
+      token = first;
+      user = Map<String, dynamic>.from(second);
+    } else {
+      throw Exception('Invalid setAuth arguments. Expected user/token or token/user.');
+    }
+
     _authToken = token;
-    _currentUser = Map<String, dynamic>.from(user);
+    _currentUser = user;
+
     await _persistQuietly();
   }
 
