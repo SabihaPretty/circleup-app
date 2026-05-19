@@ -1,4 +1,5 @@
-﻿import { Module } from '@nestjs/common';
+﻿import { ProfileModule } from './profile/profile.module';
+import { Module } from '@nestjs/common';
 import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
 import { CirclesModule } from './circles/circles.module';
@@ -23,8 +24,7 @@ import { GroupsModule } from './groups/groups.module';
 import { NicknamesModule } from './nicknames/nicknames.module';
 
 @Module({
-  imports: [
-    PrismaModule,
+  imports: [ProfileModule, PrismaModule,
     UsersModule,
     CirclesModule,
     PostsModule,
@@ -45,10 +45,11 @@ import { NicknamesModule } from './nicknames/nicknames.module';
     AdminModule,
     SettingsModule,
     GroupsModule,
-    NicknamesModule,
-  ],
+    NicknamesModule],
 })
 export class AppModule {}
+
+
 
 
 

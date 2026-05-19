@@ -4,6 +4,7 @@ import '../../core/app_session.dart';
 import '../../core/app_theme.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/premium_card.dart';
+import '../../widgets/profile_photo_uploader.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -128,6 +129,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                const ProfilePhotoUploader(),
                     Text(
                       'Change Password',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -225,6 +227,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
               children: [
+                const ProfilePhotoUploader(),
                 Container(
                   padding: const EdgeInsets.all(22),
                   decoration: BoxDecoration(
@@ -233,6 +236,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   child: const Row(
                     children: [
+                const ProfilePhotoUploader(),
                       CircleAvatar(
                         radius: 26,
                         backgroundColor: Colors.white,
@@ -256,6 +260,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                const ProfilePhotoUploader(),
                       const Text(
                         'Security',
                         style: TextStyle(
@@ -282,6 +287,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
+                const ProfilePhotoUploader(),
                           modeChip('email', 'Email', Icons.email),
                           modeChip('phone', 'Phone', Icons.phone),
                         ],
@@ -362,3 +368,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
+

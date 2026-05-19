@@ -11,6 +11,7 @@ class MediaUploadService {
     final result = await FilePicker.pickFiles(
       type: type,
       withData: true,
+      withReadStream: true,
       allowMultiple: false,
     );
 
@@ -20,9 +21,9 @@ class MediaUploadService {
 
     final file = result.files.first;
 
-    if (file.bytes == null) {
-      throw Exception('Selected file data could not be read.');
-    }
+    final fileName = file.name.trim().isNotEmpty
+        ? file.name.trim()
+        : 'circleup_upload_${DateTime.now().millisecondsSinceEpoch}.bin';
 
     final request = http.MultipartRequest(
       'POST',
@@ -35,13 +36,26 @@ class MediaUploadService {
       request.headers['Authorization'] = 'Bearer $token';
     }
 
-    request.files.add(
-      http.MultipartFile.fromBytes(
-        'file',
-        file.bytes!,
-        filename: file.name,
-      ),
-    );
+    if (file.bytes != null) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          file.bytes!,
+          filename: fileName,
+        ),
+      );
+    } else if (file.readStream != null && file.size > 0) {
+      request.files.add(
+        http.MultipartFile(
+          'file',
+          file.readStream!,
+          file.size,
+          filename: fileName,
+        ),
+      );
+    } else {
+      throw Exception('Selected file data could not be read. Please choose another file.');
+    }
 
     final streamed = await request.send();
     final response = await http.Response.fromStream(streamed);
@@ -62,6 +76,64 @@ class MediaUploadService {
       );
     }
 
-    return Map<String, dynamic>.from(decoded['data'] ?? {});
+    if (decoded is! Map) {
+      throw Exception('Upload response is invalid.');
+    }
+
+    final rawData = decoded['data'];
+
+    if (rawData is! Map) {
+      throw Exception('Upload response data is invalid.');
+    }
+
+    final data = Map<String, dynamic>.from(rawData);
+
+    final rawUrl = data['url']?.toString();
+
+    if (rawUrl == null || rawUrl.trim().isEmpty) {
+      final fileNameFromServer = data['fileName']?.toString();
+
+      if (fileNameFromServer == null || fileNameFromServer.trim().isEmpty) {
+        throw Exception('Uploaded file URL is missing.');
+      }
+
+      data['url'] = '/uploads/$fileNameFromServer';
+    }
+
+    data['mediaType'] = (data['mediaType']?.toString().isNotEmpty ?? false)
+        ? data['mediaType'].toString()
+        : _detectMediaType(fileName);
+
+    data['originalName'] = data['originalName']?.toString() ?? fileName;
+
+    return data;
+  }
+
+  static String _detectMediaType(String fileName) {
+    final lower = fileName.toLowerCase();
+
+    if (lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.webp') ||
+        lower.endsWith('.gif')) {
+      return 'photo';
+    }
+
+    if (lower.endsWith('.mp4') ||
+        lower.endsWith('.mov') ||
+        lower.endsWith('.avi') ||
+        lower.endsWith('.mkv') ||
+        lower.endsWith('.webm')) {
+      return 'video';
+    }
+
+    if (lower.endsWith('.mp3') ||
+        lower.endsWith('.wav') ||
+        lower.endsWith('.m4a')) {
+      return 'audio';
+    }
+
+    return 'file';
   }
 }

@@ -16,6 +16,17 @@ if (!existsSync(uploadDir)) {
   mkdirSync(uploadDir, { recursive: true });
 }
 
+function safeFileName(originalName: string) {
+  const clean = String(originalName || 'circleup-file')
+    .replace(/[^\w.\-]+/g, '_')
+    .slice(0, 80);
+
+  const ext = extname(clean);
+  const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+
+  return `${unique}${ext || '.bin'}`;
+}
+
 @Controller('media')
 export class MediaController {
   @Post('upload')
@@ -24,22 +35,20 @@ export class MediaController {
       storage: diskStorage({
         destination: uploadDir,
         filename: (req, file, callback) => {
-          const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-          const ext = extname(file.originalname || '');
-          callback(null, `${unique}${ext}`);
+          callback(null, safeFileName(file.originalname));
         },
       }),
       limits: {
-        fileSize: 50 * 1024 * 1024,
+        fileSize: 100 * 1024 * 1024,
       },
     }),
   )
   uploadFile(@UploadedFile() file: any) {
-    if (!file) {
+    if (!file || !file.filename) {
       throw new BadRequestException('No file uploaded.');
     }
 
-    const mime = file.mimetype || '';
+    const mime = String(file.mimetype || '');
     let mediaType = 'file';
 
     if (mime.startsWith('image/')) mediaType = 'photo';
@@ -51,9 +60,9 @@ export class MediaController {
       message: 'File uploaded successfully.',
       data: {
         fileName: file.filename,
-        originalName: file.originalname,
-        mimeType: file.mimetype,
-        size: file.size,
+        originalName: file.originalname || file.filename,
+        mimeType: file.mimetype || 'application/octet-stream',
+        size: Number(file.size || 0),
         mediaType,
         url: `/uploads/${file.filename}`,
       },
