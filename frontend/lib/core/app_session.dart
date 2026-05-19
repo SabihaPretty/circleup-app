@@ -5,9 +5,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AppSession {
   static const String _tokenKey = 'circleup_auth_token';
   static const String _userKey = 'circleup_current_user';
+  static const String _selectedCircleKey = 'circleup_selected_circle';
 
   static String? _authToken;
   static Map<String, dynamic>? _currentUser;
+  static Map<String, dynamic>? _selectedCircle;
   static bool _loadingFromStorage = false;
 
   static String? get authToken => _authToken;
@@ -28,6 +30,15 @@ class AppSession {
     }
   }
 
+  static Map<String, dynamic>? get selectedCircle => _selectedCircle;
+
+  static set selectedCircle(Map<String, dynamic>? value) {
+    _selectedCircle = value == null ? null : Map<String, dynamic>.from(value);
+    if (!_loadingFromStorage) {
+      unawaited(_persistQuietly());
+    }
+  }
+
   static bool get isLoggedIn {
     return _authToken != null &&
         _authToken!.trim().isNotEmpty &&
@@ -42,7 +53,6 @@ class AppSession {
     _authToken = prefs.getString(_tokenKey);
 
     final userText = prefs.getString(_userKey);
-
     if (userText != null && userText.trim().isNotEmpty) {
       try {
         final decoded = jsonDecode(userText);
@@ -54,7 +64,31 @@ class AppSession {
       }
     }
 
+    final circleText = prefs.getString(_selectedCircleKey);
+    if (circleText != null && circleText.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(circleText);
+        if (decoded is Map) {
+          _selectedCircle = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {
+        _selectedCircle = null;
+      }
+    }
+
     _loadingFromStorage = false;
+  }
+
+  // Old project compatibility.
+  // Existing auth_screen.dart calls AppSession.setAuth(...),
+  // so this method must stay.
+  static Future<void> setAuth({
+    required String token,
+    required Map<String, dynamic> user,
+  }) async {
+    _authToken = token;
+    _currentUser = Map<String, dynamic>.from(user);
+    await _persistQuietly();
   }
 
   static Future<void> saveSession({
@@ -74,10 +108,12 @@ class AppSession {
   static Future<void> clearSession() async {
     _authToken = null;
     _currentUser = null;
+    _selectedCircle = null;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
+    await prefs.remove(_selectedCircleKey);
   }
 
   static Future<void> logout() async {
@@ -89,14 +125,20 @@ class AppSession {
 
     final token = _authToken;
     final user = _currentUser;
+    final circle = _selectedCircle;
 
     if (token == null || token.trim().isEmpty || user == null) {
       await prefs.remove(_tokenKey);
       await prefs.remove(_userKey);
-      return;
+    } else {
+      await prefs.setString(_tokenKey, token);
+      await prefs.setString(_userKey, jsonEncode(user));
     }
 
-    await prefs.setString(_tokenKey, token);
-    await prefs.setString(_userKey, jsonEncode(user));
+    if (circle == null) {
+      await prefs.remove(_selectedCircleKey);
+    } else {
+      await prefs.setString(_selectedCircleKey, jsonEncode(circle));
+    }
   }
 }
