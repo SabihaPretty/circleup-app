@@ -79,13 +79,13 @@ class AppSession {
     _loadingFromStorage = false;
   }
 
-  // Old project compatibility.
-  // Existing auth_screen.dart calls AppSession.setAuth(...),
-  // so this method must stay.
-  static Future<void> setAuth({
-    required String token,
-    required Map<String, dynamic> user,
-  }) async {
+  // Old project compatibility:
+  // Your auth_screen.dart calls AppSession.setAuth(token, user)
+  // so this method accepts positional arguments.
+  static Future<void> setAuth(
+    String token,
+    Map<String, dynamic> user,
+  ) async {
     _authToken = token;
     _currentUser = Map<String, dynamic>.from(user);
     await _persistQuietly();
