@@ -261,7 +261,7 @@ class _SafetyScreenState extends State<SafetyScreen> {
     }
 
     return DropdownButtonFormField<int>(
-      value: selectedTargetUserId,
+      initialValue: selectedTargetUserId,
       decoration: InputDecoration(
         labelText: 'Select user',
         filled: true,
@@ -311,7 +311,7 @@ class _SafetyScreenState extends State<SafetyScreen> {
               userDropdown(),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: reason,
+                initialValue: reason,
                 decoration: InputDecoration(
                   labelText: 'Reason',
                   filled: true,
@@ -335,7 +335,7 @@ class _SafetyScreenState extends State<SafetyScreen> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: severity,
+                initialValue: severity,
                 decoration: InputDecoration(
                   labelText: 'Severity',
                   filled: true,

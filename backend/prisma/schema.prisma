@@ -342,3 +342,15 @@ model UserNickname {
 
   @@unique([ownerId, targetId])
 }
+
+model RealCallSession {
+  id          Int       @id @default(autoincrement())
+  channelName String    @unique
+  callerId    Int
+  receiverId  Int
+  callType    String    @default("audio")
+  status      String    @default("ringing")
+  createdAt   DateTime  @default(now())
+  acceptedAt  DateTime?
+  endedAt     DateTime?
+}

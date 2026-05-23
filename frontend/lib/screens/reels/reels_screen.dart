@@ -441,7 +441,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
                                     width: double.infinity,
                                     height: double.infinity,
                                     fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) {
+                                    errorBuilder: (_, _, _) {
                                       return Center(
                                         child: Icon(
                                           reelIcon(mediaType, reelCategory),

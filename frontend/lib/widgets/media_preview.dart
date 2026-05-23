@@ -31,7 +31,7 @@ class MediaPreview extends StatelessWidget {
               width: double.infinity,
               height: 210,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) {
+              errorBuilder: (_, _, _) {
                 return fallbackPreview(Icons.broken_image, 'Image failed to load');
               },
             ),

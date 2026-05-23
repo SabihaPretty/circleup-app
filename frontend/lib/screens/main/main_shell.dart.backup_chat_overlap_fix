@@ -458,7 +458,13 @@ IconButton(
         ],
       ),
       body: activeItem.page,
-      
+      floatingActionButton: FloatingActionButton(
+        onPressed: showCreateSheet,
+        backgroundColor: AppTheme.primary,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: const Icon(Icons.add),
+      ),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
         child: ClipRRect(
@@ -492,7 +498,6 @@ IconButton(
     );
   }
 }
-
 
 
 

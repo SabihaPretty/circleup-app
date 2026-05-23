@@ -2,6 +2,7 @@
 import 'core/app_session.dart';
 import 'screens/auth/auth_screen.dart';
 import 'screens/main/main_shell.dart';
+import 'widgets/call_watcher.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,7 +27,9 @@ class CircleUpApp extends StatelessWidget {
         ),
         scaffoldBackgroundColor: const Color(0xfff7f8fc),
       ),
-      home: AppSession.isLoggedIn ? const MainShell() : const AuthScreen(),
+      home: AppSession.isLoggedIn
+          ? const CallWatcher(child: MainShell())
+          : const AuthScreen(),
     );
   }
 }

@@ -815,7 +815,7 @@ class _AuthScreenState extends State<AuthScreen> {
             Expanded(
               flex: 2,
               child: DropdownButtonFormField<int>(
-                value: selectedMonth,
+                initialValue: selectedMonth,
                 decoration: inputDecoration(
                   label: 'Birth Month',
                   icon: Icons.calendar_month,
@@ -839,7 +839,7 @@ class _AuthScreenState extends State<AuthScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: DropdownButtonFormField<int>(
-                value: selectedDay,
+                initialValue: selectedDay,
                 decoration: inputDecoration(
                   label: 'Date',
                   icon: Icons.today,
