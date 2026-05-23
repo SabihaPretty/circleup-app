@@ -1,7 +1,9 @@
 ﻿import 'dart:async';
+
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+
 import '../../core/api_service.dart';
 import '../../core/app_session.dart';
 
@@ -80,6 +82,7 @@ class _CallScreenState extends State<CallScreen> {
 
   int? remoteUid;
   int seconds = 0;
+
   Timer? timer;
 
   Map<String, dynamic>? session;
@@ -101,6 +104,7 @@ class _CallScreenState extends State<CallScreen> {
   int get currentUid {
     final user = AppSession.currentUser;
     final id = user?['id'];
+
     return int.tryParse(id.toString()) ?? 0;
   }
 
@@ -118,7 +122,10 @@ class _CallScreenState extends State<CallScreen> {
     for (final item in sources) {
       if (item is Map && item['id'] != null) {
         final id = int.tryParse(item['id'].toString());
-        if (id != null && id > 0 && id != currentUid) return id;
+
+        if (id != null && id > 0 && id != currentUid) {
+          return id;
+        }
       }
     }
 
@@ -182,6 +189,7 @@ class _CallScreenState extends State<CallScreen> {
         });
 
         final data = Map<String, dynamic>.from(result['data']);
+
         session = Map<String, dynamic>.from(data['session']);
         rtc = Map<String, dynamic>.from(data['rtc']);
       } else {
@@ -191,30 +199,57 @@ class _CallScreenState extends State<CallScreen> {
       await initAgora();
     } catch (e) {
       showMessage('Call failed: ${cleanError(e)}');
-      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        Navigator.pop(context);
+      }
     }
 
-    if (mounted) setState(() => loading = false);
+    if (mounted) {
+      setState(() => loading = false);
+    }
   }
 
   Future<void> initAgora() async {
-    if (widget.callIsVideo) {
-      await Permission.camera.request();
+    final micStatus = await Permission.microphone.request();
+
+    if (!micStatus.isGranted) {
+      throw Exception('Microphone permission denied.');
     }
-    await Permission.microphone.request();
+
+    if (widget.callIsVideo) {
+      final camStatus = await Permission.camera.request();
+
+      if (!camStatus.isGranted) {
+        throw Exception('Camera permission denied.');
+      }
+    }
 
     final rtcData = rtc;
-    if (rtcData == null) throw Exception('RTC data missing.');
+
+    if (rtcData == null) {
+      throw Exception('RTC data missing.');
+    }
 
     final appId = rtcData['appId']?.toString();
     final token = rtcData['token']?.toString();
     final channelName = rtcData['channelName']?.toString();
     final uid = int.tryParse(rtcData['uid'].toString()) ?? currentUid;
 
-    if (appId == null || appId.isEmpty) throw Exception('Agora App ID missing.');
-    if (token == null || token.isEmpty) throw Exception('Agora token missing.');
+    if (appId == null || appId.isEmpty) {
+      throw Exception('Agora App ID missing.');
+    }
+
+    if (token == null || token.isEmpty) {
+      throw Exception('Agora token missing.');
+    }
+
     if (channelName == null || channelName.isEmpty) {
       throw Exception('Agora channel missing.');
+    }
+
+    if (uid <= 0) {
+      throw Exception('Agora uid missing.');
     }
 
     engine = createAgoraRtcEngine();
@@ -230,19 +265,23 @@ class _CallScreenState extends State<CallScreen> {
       RtcEngineEventHandler(
         onJoinChannelSuccess: (connection, elapsed) {
           if (!mounted) return;
+
           setState(() => joined = true);
+
           startTimer();
         },
         onUserJoined: (connection, remoteUidValue, elapsed) {
           if (!mounted) return;
+
           setState(() => remoteUid = remoteUidValue);
         },
         onUserOffline: (connection, remoteUidValue, reason) {
           if (!mounted) return;
+
           setState(() => remoteUid = null);
         },
         onError: (errorCode, message) {
-          showMessage('Agora error: $errorCode');
+          showMessage('Agora error: $errorCode ${message ?? ''}');
         },
       ),
     );
@@ -261,20 +300,20 @@ class _CallScreenState extends State<CallScreen> {
       token: token,
       channelId: channelName,
       uid: uid,
-      options: ChannelMediaOptions(
-        autoSubscribeAudio: true,
-        autoSubscribeVideo: widget.callIsVideo,
-        publishMicrophoneTrack: true,
-        publishCameraTrack: widget.callIsVideo,
+      options: const ChannelMediaOptions(
         clientRoleType: ClientRoleType.clientRoleBroadcaster,
+        autoSubscribeAudio: true,
+        autoSubscribeVideo: true,
       ),
     );
   }
 
   void startTimer() {
     timer?.cancel();
+
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
+
       setState(() => seconds++);
     });
   }
@@ -282,6 +321,7 @@ class _CallScreenState extends State<CallScreen> {
   Future<void> leaveAgora() async {
     try {
       final id = session?['id'];
+
       if (id != null) {
         await ApiService.post('/real-calls/end', {
           'callId': id,
@@ -297,33 +337,48 @@ class _CallScreenState extends State<CallScreen> {
 
   Future<void> endCall() async {
     timer?.cancel();
+
     await leaveAgora();
 
     if (!mounted) return;
+
     Navigator.of(context).pop();
   }
 
   Future<void> toggleMute() async {
     muted = !muted;
+
     await engine?.muteLocalAudioStream(muted);
-    if (mounted) setState(() {});
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> toggleCamera() async {
     cameraOff = !cameraOff;
+
     await engine?.muteLocalVideoStream(cameraOff);
-    if (mounted) setState(() {});
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> toggleSpeaker() async {
     speakerOn = !speakerOn;
+
     await engine?.setEnableSpeakerphone(speakerOn);
-    if (mounted) setState(() {});
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   String get durationText {
     final min = (seconds ~/ 60).toString().padLeft(2, '0');
     final sec = (seconds % 60).toString().padLeft(2, '0');
+
     return '$min:$sec';
   }
 
@@ -333,8 +388,11 @@ class _CallScreenState extends State<CallScreen> {
 
   void showMessage(String message) {
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(
+        content: Text(message),
+      ),
     );
   }
 
@@ -358,17 +416,48 @@ class _CallScreenState extends State<CallScreen> {
               color: background,
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: color, size: 28),
+            child: Icon(
+              icon,
+              color: color,
+              size: 28,
+            ),
           ),
         ),
         const SizedBox(height: 8),
-        Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget avatarCircle() {
+    final letter =
+        displayName.trim().isEmpty ? 'C' : displayName.trim()[0].toUpperCase();
+
+    return Center(
+      child: CircleAvatar(
+        radius: 72,
+        backgroundColor: const Color(0xff6759ff),
+        child: Text(
+          letter,
+          style: const TextStyle(
+            fontSize: 48,
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
     );
   }
 
   Widget localVideo() {
     final e = engine;
+
     if (e == null || !widget.callIsVideo || cameraOff) {
       return avatarCircle();
     }
@@ -384,12 +473,16 @@ class _CallScreenState extends State<CallScreen> {
   Widget remoteVideo() {
     final e = engine;
     final uid = remoteUid;
+    final channelName = rtc?['channelName']?.toString();
 
-    if (e == null || !widget.callIsVideo || uid == null) {
+    if (e == null || !widget.callIsVideo || uid == null || channelName == null) {
       return Center(
         child: Text(
-          widget.callIsVideo ? 'Waiting for video...' : 'Connected',
-          style: const TextStyle(color: Colors.white, fontSize: 16),
+          widget.callIsVideo ? 'Waiting for remote video...' : 'Connected',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+          ),
         ),
       );
     }
@@ -398,27 +491,8 @@ class _CallScreenState extends State<CallScreen> {
       controller: VideoViewController.remote(
         rtcEngine: e,
         canvas: VideoCanvas(uid: uid),
-        connection: RtcConnection(channelId: rtc?['channelName']?.toString()),
-      ),
-    );
-  }
-
-  Widget avatarCircle() {
-    final letter = displayName.trim().isEmpty
-        ? 'C'
-        : displayName.trim()[0].toUpperCase();
-
-    return Center(
-      child: CircleAvatar(
-        radius: 72,
-        backgroundColor: const Color(0xff6759ff),
-        child: Text(
-          letter,
-          style: const TextStyle(
-            fontSize: 48,
-            color: Colors.white,
-            fontWeight: FontWeight.w900,
-          ),
+        connection: RtcConnection(
+          channelId: channelName,
         ),
       ),
     );
@@ -446,7 +520,9 @@ class _CallScreenState extends State<CallScreen> {
               decoration: BoxDecoration(
                 color: Colors.black,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white24),
+                border: Border.all(
+                  color: Colors.white24,
+                ),
               ),
               clipBehavior: Clip.antiAlias,
               child: localVideo(),
@@ -515,7 +591,9 @@ class _CallScreenState extends State<CallScreen> {
                   const Spacer(),
                   Text(
                     widget.callIsVideo ? 'Real Video Call' : 'Real Audio Call',
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(
+                      color: Colors.white,
+                    ),
                   ),
                 ],
               ),
@@ -534,7 +612,10 @@ class _CallScreenState extends State<CallScreen> {
               const SizedBox(height: 8),
               Text(
                 status,
-                style: const TextStyle(color: Colors.white70, fontSize: 15),
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 15,
+                ),
               ),
               const Spacer(),
               callControls(),

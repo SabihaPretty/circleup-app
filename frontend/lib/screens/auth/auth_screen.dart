@@ -4,6 +4,7 @@ import '../../core/api_service.dart';
 import '../../core/app_session.dart';
 import '../../core/app_theme.dart';
 import '../main/main_shell.dart';
+import '../../widgets/call_watcher.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -300,7 +301,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const MainShell()),
+        MaterialPageRoute(builder: (_) => const CallWatcher(child: MainShell())),
       );
     } catch (e) {
       if (!mounted) return;
@@ -348,7 +349,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const MainShell()),
+        MaterialPageRoute(builder: (_) => const CallWatcher(child: MainShell())),
       );
     } catch (e) {
       if (!mounted) return;
@@ -383,7 +384,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const MainShell()),
+        MaterialPageRoute(builder: (_) => const CallWatcher(child: MainShell())),
       );
     } catch (e) {
       if (!mounted) return;
@@ -1032,3 +1033,4 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 }
+

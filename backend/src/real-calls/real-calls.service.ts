@@ -16,17 +16,21 @@ export class RealCallsService {
 
   private appId() {
     const appId = process.env.AGORA_APP_ID;
+
     if (!appId) {
       throw new InternalServerErrorException('AGORA_APP_ID is missing.');
     }
+
     return appId;
   }
 
   private appCertificate() {
     const cert = process.env.AGORA_APP_CERTIFICATE;
+
     if (!cert) {
       throw new InternalServerErrorException('AGORA_APP_CERTIFICATE is missing.');
     }
+
     return cert;
   }
 
@@ -118,7 +122,9 @@ export class RealCallsService {
     }
 
     const session = await this.prisma.realCallSession.findUnique({
-      where: { id: callId },
+      where: {
+        id: callId,
+      },
     });
 
     if (!session) {
@@ -130,7 +136,9 @@ export class RealCallsService {
     }
 
     const updated = await this.prisma.realCallSession.update({
-      where: { id: callId },
+      where: {
+        id: callId,
+      },
       data: {
         status: 'accepted',
         acceptedAt: new Date(),
@@ -147,20 +155,6 @@ export class RealCallsService {
     };
   }
 
-  async token(data: any) {
-    const channelName = String(data.channelName || '').trim();
-    const uid = Number(data.uid);
-
-    if (!channelName || !uid) {
-      throw new BadRequestException('channelName and uid are required.');
-    }
-
-    return {
-      success: true,
-      data: this.makeToken(channelName, uid),
-    };
-  }
-
   async endCall(data: any) {
     const callId = Number(data.callId);
 
@@ -172,7 +166,9 @@ export class RealCallsService {
     }
 
     const existing = await this.prisma.realCallSession.findUnique({
-      where: { id: callId },
+      where: {
+        id: callId,
+      },
     });
 
     if (!existing) {
@@ -183,7 +179,9 @@ export class RealCallsService {
     }
 
     await this.prisma.realCallSession.update({
-      where: { id: callId },
+      where: {
+        id: callId,
+      },
       data: {
         status: 'ended',
         endedAt: new Date(),
@@ -204,7 +202,9 @@ export class RealCallsService {
     }
 
     await this.prisma.realCallSession.update({
-      where: { id: callId },
+      where: {
+        id: callId,
+      },
       data: {
         status: 'rejected',
         endedAt: new Date(),
@@ -214,6 +214,20 @@ export class RealCallsService {
     return {
       success: true,
       message: 'Call rejected.',
+    };
+  }
+
+  async token(data: any) {
+    const channelName = String(data.channelName || '').trim();
+    const uid = Number(data.uid);
+
+    if (!channelName || !uid) {
+      throw new BadRequestException('channelName and uid are required.');
+    }
+
+    return {
+      success: true,
+      data: this.makeToken(channelName, uid),
     };
   }
 }

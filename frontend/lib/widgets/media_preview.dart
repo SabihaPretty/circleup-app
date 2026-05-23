@@ -1,127 +1,240 @@
 ﻿import 'package:flutter/material.dart';
-import '../core/app_theme.dart';
+import 'package:video_player/video_player.dart';
 
-class MediaPreview extends StatelessWidget {
-  final String? mediaUrl;
+import '../core/api_config.dart';
+
+class MediaPreview extends StatefulWidget {
+  final String? url;
   final String? mediaType;
   final String? title;
   final VoidCallback? onRemove;
 
   const MediaPreview({
     super.key,
-    required this.mediaUrl,
-    required this.mediaType,
+    this.url,
+    this.mediaType,
     this.title,
     this.onRemove,
   });
 
   @override
+  State<MediaPreview> createState() => _MediaPreviewState();
+}
+
+class _MediaPreviewState extends State<MediaPreview> {
+  VideoPlayerController? controller;
+  bool videoReady = false;
+
+  String get fullUrl {
+    final raw = widget.url;
+
+    if (raw == null || raw.trim().isEmpty) {
+      return '';
+    }
+
+    return ApiConfig.fullMediaUrl(raw);
+  }
+
+  String get type {
+    final t = widget.mediaType?.toLowerCase().trim();
+
+    if (t != null && t.isNotEmpty) {
+      return t;
+    }
+
+    final lower = fullUrl.toLowerCase();
+
+    if (lower.contains('.mp4') ||
+        lower.contains('.mov') ||
+        lower.contains('.webm') ||
+        lower.contains('/video/')) {
+      return 'video';
+    }
+
+    if (lower.contains('.jpg') ||
+        lower.contains('.jpeg') ||
+        lower.contains('.png') ||
+        lower.contains('.webp') ||
+        lower.contains('/image/')) {
+      return 'photo';
+    }
+
+    return 'file';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    initVideoIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(covariant MediaPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.url != widget.url || oldWidget.mediaType != widget.mediaType) {
+      disposeVideo();
+      initVideoIfNeeded();
+    }
+  }
+
+  void initVideoIfNeeded() {
+    if (fullUrl.isEmpty || type != 'video') {
+      return;
+    }
+
+    controller = VideoPlayerController.networkUrl(Uri.parse(fullUrl))
+      ..initialize().then((_) {
+        if (!mounted) return;
+
+        controller?.setLooping(true);
+
+        setState(() => videoReady = true);
+      }).catchError((_) {
+        if (!mounted) return;
+
+        setState(() => videoReady = false);
+      });
+  }
+
+  void disposeVideo() {
+    controller?.dispose();
+    controller = null;
+    videoReady = false;
+  }
+
+  @override
+  void dispose() {
+    disposeVideo();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (mediaUrl == null || mediaUrl!.isEmpty) {
+    if (fullUrl.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    if (mediaType == 'image') {
-      return Stack(
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: const Color(0xff5546f2).withOpacity(.15),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: Image.network(
-              mediaUrl!,
-              width: double.infinity,
-              height: 210,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) {
-                return fallbackPreview(Icons.broken_image, 'Image failed to load');
-              },
+          if (widget.title != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                widget.title!,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: buildMedia(),
           ),
-          if (onRemove != null) removeButton(),
+          if (widget.onRemove != null)
+            TextButton.icon(
+              onPressed: widget.onRemove,
+              icon: const Icon(Icons.close),
+              label: const Text('Remove'),
+            ),
         ],
-      );
-    }
-
-    if (mediaType == 'video') {
-      return Stack(
-        children: [
-          fallbackPreview(Icons.play_circle, title ?? 'Video uploaded'),
-          if (onRemove != null) removeButton(),
-        ],
-      );
-    }
-
-    if (mediaType == 'audio') {
-      return Stack(
-        children: [
-          fallbackPreview(Icons.graphic_eq, title ?? 'Audio uploaded'),
-          if (onRemove != null) removeButton(),
-        ],
-      );
-    }
-
-    return Stack(
-      children: [
-        fallbackPreview(Icons.insert_drive_file, title ?? 'File uploaded'),
-        if (onRemove != null) removeButton(),
-      ],
+      ),
     );
   }
 
-  Widget fallbackPreview(IconData icon, String text) {
+  Widget buildMedia() {
+    if (type == 'photo') {
+      return Image.network(
+        fullUrl,
+        height: 210,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loading) {
+          if (loading == null) return child;
+
+          return const SizedBox(
+            height: 210,
+            child: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        },
+        errorBuilder: (_, __, ___) => fileBox(),
+      );
+    }
+
+    if (type == 'video') {
+      if (!videoReady || controller == null) {
+        return Container(
+          height: 210,
+          color: Colors.black,
+          child: const Center(
+            child: CircularProgressIndicator(
+              color: Colors.white,
+            ),
+          ),
+        );
+      }
+
+      return Stack(
+        alignment: Alignment.center,
+        children: [
+          AspectRatio(
+            aspectRatio: controller!.value.aspectRatio,
+            child: VideoPlayer(controller!),
+          ),
+          IconButton.filled(
+            onPressed: () {
+              setState(() {
+                if (controller!.value.isPlaying) {
+                  controller!.pause();
+                } else {
+                  controller!.play();
+                }
+              });
+            },
+            icon: Icon(
+              controller!.value.isPlaying ? Icons.pause : Icons.play_arrow,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return fileBox();
+  }
+
+  Widget fileBox() {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppTheme.primary.withOpacity(.12),
-            AppTheme.accent.withOpacity(.08),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.primary.withOpacity(.10)),
-      ),
+      height: 90,
+      color: const Color(0xfff3f4ff),
       child: Row(
         children: [
-          CircleAvatar(
-            backgroundColor: Colors.white,
-            child: Icon(icon, color: AppTheme.primary),
+          const SizedBox(width: 14),
+          const Icon(
+            Icons.insert_drive_file,
+            color: Color(0xff5546f2),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              text,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: AppTheme.dark,
-              ),
+              widget.title ?? fullUrl,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget removeButton() {
-    return Positioned(
-      right: 10,
-      top: 10,
-      child: InkWell(
-        onTap: onRemove,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(.58),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.close,
-            color: Colors.white,
-            size: 18,
-          ),
-        ),
       ),
     );
   }

@@ -1,5 +1,7 @@
 ﻿import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../core/api_service.dart';
 import '../core/app_session.dart';
 import '../screens/calls/call_screen.dart';
@@ -24,8 +26,16 @@ class _CallWatcherState extends State<CallWatcher> {
   @override
   void initState() {
     super.initState();
-    timer = Timer.periodic(const Duration(seconds: 4), (_) => checkIncoming());
-    Future.delayed(const Duration(seconds: 2), checkIncoming);
+
+    timer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => checkIncoming(),
+    );
+
+    Future.delayed(
+      const Duration(seconds: 2),
+      checkIncoming,
+    );
   }
 
   @override
@@ -49,11 +59,13 @@ class _CallWatcherState extends State<CallWatcher> {
       if (data is! Map) return;
 
       final callId = int.tryParse(data['id'].toString());
+
       if (callId == null || callId == lastCallId) return;
 
       lastCallId = callId;
 
       if (!mounted) return;
+
       showIncomingDialog(Map<String, dynamic>.from(data));
     } catch (_) {}
   }
@@ -66,13 +78,17 @@ class _CallWatcherState extends State<CallWatcher> {
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
           ),
-          title: Text('Incoming ${callType == 'video' ? 'Video' : 'Audio'} Call'),
-          content: const Text('Someone is calling you on CircleUp.'),
+          title: Text(
+            'Incoming ${callType == 'video' ? 'Video' : 'Audio'} Call',
+          ),
+          content: const Text(
+            'Someone is calling you on CircleUp.',
+          ),
           actions: [
             TextButton.icon(
               onPressed: () async {
@@ -80,9 +96,14 @@ class _CallWatcherState extends State<CallWatcher> {
                   'callId': session['id'],
                 });
 
-                if (context.mounted) Navigator.pop(context);
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
               },
-              icon: const Icon(Icons.call_end, color: Colors.red),
+              icon: const Icon(
+                Icons.call_end,
+                color: Colors.red,
+              ),
               label: const Text('Decline'),
             ),
             FilledButton.icon(
@@ -95,15 +116,20 @@ class _CallWatcherState extends State<CallWatcher> {
                 });
 
                 final responseData = Map<String, dynamic>.from(result['data']);
-                final updatedSession = Map<String, dynamic>.from(responseData['session']);
+
+                final updatedSession =
+                    Map<String, dynamic>.from(responseData['session']);
+
                 final rtc = Map<String, dynamic>.from(responseData['rtc']);
 
-                if (context.mounted) Navigator.pop(context);
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
 
                 if (!mounted) return;
 
                 Navigator.push(
-                  this.context,
+                  context,
                   MaterialPageRoute(
                     builder: (_) => CallScreen(
                       existingSession: updatedSession,

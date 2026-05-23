@@ -66,7 +66,9 @@ export class MediaController {
     const mime = String(file.mimetype || 'application/octet-stream');
     const mediaType = getMediaType(mime);
     const resourceType = getCloudinaryResourceType(mime);
-    const originalName = safeName(file.originalname || file.filename || 'circleup-file');
+    const originalName = safeName(
+      file.originalname || file.filename || 'circleup-file',
+    );
 
     const uploaded: any = await new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(

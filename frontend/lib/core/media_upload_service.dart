@@ -1,7 +1,9 @@
 ﻿import 'dart:convert';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+
 import 'api_config.dart';
 import 'app_session.dart';
 
@@ -32,6 +34,7 @@ class MediaUploadService {
     );
 
     final token = AppSession.authToken;
+
     if (token != null && token.trim().isNotEmpty) {
       request.headers['Authorization'] = 'Bearer $token';
     }
@@ -62,13 +65,16 @@ class MediaUploadService {
         ),
       );
     } else {
-      throw Exception('Selected file could not be read. Please choose another image/video/file.');
+      throw Exception(
+        'Selected file could not be read. Please choose another image/video/file.',
+      );
     }
 
     final streamed = await request.send();
     final response = await http.Response.fromStream(streamed);
 
     dynamic decoded;
+
     try {
       decoded = response.body.isNotEmpty ? jsonDecode(response.body) : null;
     } catch (_) {
@@ -90,6 +96,7 @@ class MediaUploadService {
     final data = Map<String, dynamic>.from(decoded['data']);
 
     final url = data['url']?.toString();
+
     if (url == null || url.trim().isEmpty || url == 'null') {
       throw Exception('Uploaded file URL is missing.');
     }
@@ -104,6 +111,7 @@ class MediaUploadService {
 
   static String _safeMediaType(dynamic value, String fileName) {
     final fromServer = value?.toString().trim();
+
     if (fromServer != null && fromServer.isNotEmpty && fromServer != 'null') {
       return fromServer;
     }

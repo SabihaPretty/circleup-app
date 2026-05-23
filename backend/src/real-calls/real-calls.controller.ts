@@ -25,13 +25,13 @@ export class RealCallsController {
     return this.realCallsService.rejectCall(body);
   }
 
-  @Post('token')
-  token(@Body() body: any) {
-    return this.realCallsService.token(body);
-  }
-
   @Post('end')
   end(@Body() body: any) {
     return this.realCallsService.endCall(body);
+  }
+
+  @Post('token')
+  token(@Body() body: any) {
+    return this.realCallsService.token(body);
   }
 }
